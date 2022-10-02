@@ -173,5 +173,3 @@ ___________________________________________________
     }
 }
 exports.default = KoaWebpackServer;
-const app = new KoaWebpackServer(require('../config/webpack.dev'));
-app.start();
