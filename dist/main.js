@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+/* eslint-disable @typescript-eslint/ban-types */
 const koa_1 = __importDefault(require("koa"));
 const webpack_1 = __importDefault(require("webpack"));
 const middlewares_1 = require("./middlewares");
@@ -18,6 +19,7 @@ class KoaWebpackServer {
     constructor(config, app = new koa_1.default()) {
         this.config = {};
         this.historyApiFallbackWhiteList = [];
+        this.ignoreMiddlewares = new Set();
         this.config = config;
         this.app = app;
     }
@@ -80,8 +82,19 @@ class KoaWebpackServer {
         }
         return this;
     }
-    start(options = {}) {
+    /**
+     * @description modules 模块或者模块名称
+     */
+    ignoreMiddleware(modules) {
+        modules.forEach((module) => {
+            this.ignoreMiddlewares.add(module);
+        });
+    }
+    start(option, fn) {
+        const isFn = typeof option === 'function';
+        const startBefore = isFn ? option : fn;
         setTimeout(() => {
+            // const middleware = this.app.middleware;
             const config = this.config;
             const devServer = config.devServer || {};
             const proxy = config.proxy;
@@ -118,7 +131,7 @@ class KoaWebpackServer {
             if (devServer.historyApiFallback) {
                 this.app.use((0, koa2_connect_history_api_fallback_1.default)({ whiteList: this.historyApiFallbackWhiteList }));
             }
-            this.app.use((0, middlewares_1.KoaWebpackDev)(this.compiler, Object.assign(Object.assign({}, options), { publicPath: config.output.publicPath })));
+            this.app.use((0, middlewares_1.KoaWebpackDev)(this.compiler, Object.assign(Object.assign({}, (isFn ? {} : option)), { publicPath: config.output.publicPath })));
             // 静态资源服务
             if (devServer.static) {
                 if (!Array.isArray(devServer.static)) {
@@ -133,6 +146,9 @@ class KoaWebpackServer {
                     }
                 });
             }
+            this.app.middleware = this.app.middleware.filter((module) => !this.ignoreMiddlewares.has(module) && !this.ignoreMiddlewares.has(module.name));
+            // this.app.middleware = [...this.app.middleware, ...middleware];
+            startBefore && startBefore(this.app);
             this.app.listen(devServer.port || 3000, () => {
                 this.compiler.hooks.done.tap('done', () => {
                     var _a;
@@ -148,7 +164,7 @@ class KoaWebpackServer {
                         else if (process_1.default.platform === 'darwin') {
                             cmd = 'open';
                         }
-                        child_process_1.default.exec(cmd + ' "' + url + '"');
+                        child_process_1.default.exec(`${cmd} "${url}"`);
                     }
                     devServer.open = false;
                     setTimeout(() => {

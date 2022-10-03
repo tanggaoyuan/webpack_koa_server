@@ -1,4 +1,4 @@
-
+/* eslint-disable @typescript-eslint/ban-types */
 import Koa from 'koa';
 
 import webpack, { Compiler } from 'webpack';
@@ -32,13 +32,12 @@ interface KoaWebpackOption {
   }>,
 }
 
-
 class KoaWebpackServer {
-
   private config: Record<string, any> = {};
   private compiler?: Compiler;
   private historyApiFallbackWhiteList: Array<string> = [];
   public app: Koa;
+  private ignoreMiddlewares: Set<Function | string> = new Set();
 
   constructor(config: Record<string, any>, app: Koa = new Koa()) {
     this.config = config;
@@ -88,7 +87,6 @@ class KoaWebpackServer {
     return localWlanHost;
   }
 
-
   public setStaticServer(options: KoaWebpackOption['static'], mix = true) {
     const { devServer } = this.config;
     if (!Array.isArray(devServer.static)) {
@@ -105,9 +103,23 @@ class KoaWebpackServer {
     return this;
   }
 
-  public start(options: KoaWebpackDevOptions = {}) {
+  /**
+   * @description modules 模块或者模块名称
+   */
+  public ignoreMiddleware(modules: Array<Function> | Array<string>) {
+    modules.forEach((module) => {
+      this.ignoreMiddlewares.add(module);
+    });
+  }
+
+  public start(option?: KoaWebpackDevOptions | ((app: Koa) => void), fn?: (app: Koa) => void) {
+    const isFn = typeof option === 'function';
+
+    const startBefore = isFn ? option : fn;
 
     setTimeout(() => {
+      // const middleware = this.app.middleware;
+
       const config = this.config;
       const devServer = config.devServer || {};
       const proxy = config.proxy;
@@ -126,7 +138,7 @@ class KoaWebpackServer {
           config.entry.unshift(hot_client);
         } else {
           Object.keys(config.entry).forEach((key) => {
-            if(!Array.isArray(config.entry[key])){
+            if (!Array.isArray(config.entry[key])) {
               config.entry[key] = [config.entry[key]];
             }
             config.entry[key].unshift(hot_client);
@@ -148,7 +160,7 @@ class KoaWebpackServer {
         this.app.use(HistoryApiFallback({ whiteList: this.historyApiFallbackWhiteList }));
       }
 
-      this.app.use(KoaWebpackDev(this.compiler, { ...options, publicPath: config.output.publicPath }));
+      this.app.use(KoaWebpackDev(this.compiler, { ...(isFn ? {} : option), publicPath: config.output.publicPath }));
 
       // 静态资源服务
       if (devServer.static) {
@@ -164,10 +176,13 @@ class KoaWebpackServer {
         });
       }
 
+      this.app.middleware = this.app.middleware.filter((module) => !this.ignoreMiddlewares.has(module) && !this.ignoreMiddlewares.has(module.name));
+      // this.app.middleware = [...this.app.middleware, ...middleware];
+
+      startBefore && startBefore(this.app);
+
       this.app.listen(devServer.port || 3000, () => {
-
         this.compiler.hooks.done.tap('done', () => {
-
           if (devServer.open) {
             const url = `http://localhost:${config.devServer?.port}`;
             let cmd = '';
@@ -178,7 +193,7 @@ class KoaWebpackServer {
             } else if (process.platform === 'darwin') {
               cmd = 'open';
             }
-            child_process.exec(cmd + ' "' + url + '"');
+            child_process.exec(`${cmd} "${url}"`);
           }
           devServer.open = false;
           setTimeout(() => {
@@ -190,9 +205,7 @@ ___________________________________________________
 ___________________________________________________
             `);
           });
-
         });
-
 
         process.on('unhandledRejection', (err) => {
           console.log(`unhandledRejection: ${err['message']}, stack: ${err['stack']}`);
@@ -204,7 +217,6 @@ ___________________________________________________
       });
     }, 0);
   }
-
 }
 
 export default KoaWebpackServer;
