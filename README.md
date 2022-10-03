@@ -123,5 +123,5 @@ server.ignoreMiddleware(['koaNotFound',koaNotFound])
 
 ```
 
-[用例地址](https://github.com/tanggaoyuan/react_koa_dome)
+[用例地址](https://github.com/tanggaoyuan/react_koa_demo)
 
